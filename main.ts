@@ -17,22 +17,36 @@ function sendRawCommand(data: Buffer): void {
     pins.digitalWritePin(RC522_CS, 1)
 }
 
+function isTagPresent(): boolean {
+    pins.digitalWritePin(RC522_CS, 0)
+    pins.spiWrite(0x26) // REQA
+    let response = pins.spiWrite(0)
+    pins.digitalWritePin(RC522_CS, 1)
+    return response != 0
+}
+
 namespace NTAG {
     //% block="NTAG write page %page data %text"
     //% page.min=4 page.max=39
     export function ntagWrite(page: number, text: string): void {
         initRC522()
 
-        let buf = pins.createBuffer(6)
-        buf.setUint8(0, 0xA2)         // Write command for NTAG213
-        buf.setUint8(1, page)         // Page number
+        if (!isTagPresent()) {
+            serial.writeLine("❌ No tag detected.")
+            basic.showIcon(IconNames.No)
+            return
+        }
 
+        let buf = pins.createBuffer(6)
+        buf.setUint8(0, 0xA2)         // Write command
+        buf.setUint8(1, page)         // Page number
         for (let i = 0; i < 4; i++) {
-            buf.setUint8(i + 2, text.charCodeAt(i) || 32) // 4 bytes of data, padded with spaces
+            buf.setUint8(i + 2, text.charCodeAt(i) || 32)
         }
 
         sendRawCommand(buf)
-        serial.writeLine("Wrote to page " + page + ": " + text)
+        serial.writeLine("✅ Wrote to page " + page + ": " + text)
+        basic.showIcon(IconNames.Yes)
     }
 
     //% block="NTAG read page %page"
@@ -56,7 +70,7 @@ namespace NTAG {
         }
         pins.digitalWritePin(RC522_CS, 1)
 
-        serial.writeLine("Read from page " + page + ": " + result)
+        serial.writeLine("📖 Read from page " + page + ": " + result)
         return result
     }
 }
